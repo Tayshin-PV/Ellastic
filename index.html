@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv='content-type' content='text/html; charset=UTF-8' />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, max-age=0, must-revalidate, post-check=0, pre-check=0" />
+    <meta name="viewport" content="width=device-width" />
+    <title>Search with Elasticsearch</title>
+    <link href="Content/bootstrap.min.css" rel="stylesheet" />
+    <link href="Content/angular-material.min.css" rel="stylesheet" />
+    <script src="Scripts/angular.min.js"></script>
+    <script src="Scripts/angular-ui/ui-bootstrap-tpls.min.js"></script>
+    <script src="Scripts/angular-route.min.js"></script>
+    <!--    <script src="Scripts/angular-ui/ui-bootstrap-tpls.min.js"></script>-->
+    <script src="Scripts/angular-animate.min.js"></script>
+    <script src="Scripts/angular-sanitize.min.js"></script>
+    <script src="Scripts/angular-aria.min.js"></script>
+    <script src="Scripts/angular-material.min.js"></script>
+    <script src="Scripts/app/app.js"></script>
+    <link href="Content/site.css" rel="stylesheet" />
+</head>
+<body ng-app="elasticsearch" ng-controller="searchController">
+    <asp:HyperLinkField DataNavigateUrlFields="AppID" DataNavigateUrlFormatString="~/Default2.aspx?AppID={0}" Text="Select" />
+    <div ng-cloak layout="column" layout-padding>
+        <div layout-gt-xs="row" ng-style="myStyle">
+            <div layout="column">
+                <img alt="" ng-src="Image/images.jpg" class="md-avatar" />
+            </div>
+            <div layout="column" layout-align="center center">Cистема поиска</div>
+            <!--<p>{{savedSearch}}</p>-->
+        </div>
+        <div layout-align="start">
+            <form ng-submit="search()">
+                <div layout-gt-xs="row">
+                    <md-input-container>
+                        <label>Выберите источник для поиска</label>
+                        <md-select ng-model="sourceselected" ng-change="switchSource()">
+                            <md-option ng-value=""><em>Все источники</em></md-option>
+                            <md-option ng-repeat="item in aggsSources" ng-value="item">
+                                {{item}}
+                            </md-option>
+                        </md-select>
+                    </md-input-container>
+                </div>
+                <div layout-gt-xs="row">
+                    <md-input-container class="imd-block">
+                        <label>Искать...</label>
+                        <input class="form-control" autofocus type="search" aria-label="Search" ng-model="query"
+                               uib-typeahead="item for item in autocomplete($viewValue)"
+                               typeahead-on-select="typeaheadOnSelect($item, $model, $label, $event)">
+                        <div class="auto-style1">Использование подстановочных символов: любое количество символов до или после:  * ;   сочетание слов  + ; для точного совпадения используйте "кавычки"</div>
+                    </md-input-container>
+                    <div>
+                        <md-button class="btn-search" type="submit">Искать</md-button>
+                    </div>
+                </div>
+            </form>
+        </div>
+        <div layout="row" ng-show="suggested.length > 0">
+            <h4>Возможно, вы имели в виду:</h4>
+            <ul class="sugestion-list">
+                <li ng-repeat="item in suggested"><a ng-click="">{{item}}</a></li>
+            </ul>
+        </div>
+        <div layout-gt-xs="row" layout-align="start start">
+            <div layout="column" flex="33">
+                <div layout="row"><h6 ng-show="total">Найдено <b>{{total}}</b> документов за <b>{{took}}</b> мс.</h6></div>
+                <div layout="row" ng-show="message"><h6>{{message}}</h6></div>
+                <div layout="row" ng-show="searchID"><h6>{{searchID}}</h6></div>
+                <div layout="row" ng-show="total > 0">
+                    <div layout="column" flex="90">
+                        <section ng-repeat="(a, b) in aggs">
+                            <md-subheader class="md-no-sticky">
+                                <span>{{a}}</span>
+                            </md-subheader>
+                            <input type="text" class="form-control" ng-model="userQuery.$" placeholder="Начните набор для фильтрации">                            <ul class="category-list text-nowrap">
+                                <li flex="100" ng-repeat="c in b| filter:userQuery">
+                                    <input type="checkbox" ng-click="toggleFilters(a,c);" id="blockCheckbox{{$parent.$index}}_{{$index}}">
+                                    <label for="blockCheckbox{{$parent.$index}}_{{$index}}" title={{c}}>{{c}}</label>
+                                    <small class="pull-right" ng-show="count>0">({{count}})</small>
+                                </li>
+                            </ul>
+                        </section>
+                    </div>
+                </div>
+            </div>
+            <div layout="column" layout-align="space-around" flex>
+                <div layout="row" ng-show="total > 10" layout-align="center">
+                    <ul uib-pagination total-items="total" ng-model="currentPage" max-size="maxSize" boundary-link-numbers="true" previous-text="Предыдущая" next-text="Следущая" ng-click="togglePages(currentPage)"></ul>
+                </div>
+                <div layout="row" ng-repeat="item in items" ng-hide="isLoading">
+                    <md-content flex ui-view>
+                        <div layout="row" ng-show="item.filename">
+                            <a flex ng-click="getFile(item.Id)">
+                                <h6>Файл: {{item.filename}}</h6>
+                            </a>
+                        </div>
+                        <div layout="row" ng-show="!item.Email && !item.filename">
+                            <a flex="100" ng-click="getFile(item.Id)" ng-style="myStyle" ng-mouseenter="myStyle = {'background-color':'lightgray'}" ng-mouseleave="myStyle={}">
+                                <h6>Ссылка</h6>
+                            </a>
+                        </div>
+                        <div layout="row" ng-show="item.Email">
+                            <a href="mailto:{{item.Email}}?subject=Заказ поисковой системы&body={{strip_html_tags(item.Content)}}">
+                                <h6>Заказать: {{item.Email}}</h6>
+                            </a>
+                        </div>
+                        <div layout="row">
+                            <p ng-bind-html="item.Content | highlight"></p>
+                        </div>
+                        <div layout="row" ng-repeat="(key,value) in item.Description">
+                            <div flex="20">{{key}}</div><div flex>{{value}}</div>
+                        </div>
+                    </md-content>
+                </div>
+                <div layout="row" ng-show="total > 10" layout-align="center">
+                    <ul uib-pagination total-items="total" ng-model="currentPage" max-size="maxSize" boundary-link-numbers="true" previous-text="Предыдущая" next-text="Следущая" ng-click="togglePages(currentPage)"></ul>
+                </div>
+            </div>
+        </div>
+        <img id="loadImg" src="Image/images.jpg" style="position:absolute;display:none;" />
+    </div>
+</body>
+</html>
